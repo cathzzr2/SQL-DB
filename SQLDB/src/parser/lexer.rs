@@ -210,4 +210,75 @@ impl<'a> Lexer<'a> {
         Some(token)
     }
 
-    
+// scan and get the next Token
+fn scan(&mut self) -> Result<Option<Token>> {
+    // remove blank
+    self.erase_whitespace();
+    // check condition based on the first letter
+    match self.iter.peek() {
+        Some('\'') => self.scan_string(), // scan strings
+        Some(c) if c.is_ascii_digit() => Ok(self.scan_number()), // scan numbers
+        Some(c) if c.is_alphabetic() => Ok(self.scan_ident()), // scan Ident
+        Some(_) => Ok(self.scan_symbol()), // scan symbols
+        None => Ok(None),
+    }
+}
+
+fn scan_string(&mut self) -> Result<Option<Token>> {
+    // 判断是否是单引号开头
+    if self.next_if(|c| c == '\'').is_none() {
+        return Ok(None);
+    }
+
+    let mut val = String::new();
+    loop {
+        match self.iter.next() {
+            Some('\'') => break,
+            Some(c) => val.push(c),
+            None => return Err(Error::Parse(format!("[Lexer] Unexpected end of string"))),
+        }
+    }
+
+    Ok(Some(Token::String(val)))
+}
+
+fn scan_number(&mut self) -> Option<Token> {
+    // scan partially
+    let mut num = self.next_while(|c| c.is_ascii_digit())?;
+    // if dot appears, the number is float
+    if let Some(sep) = self.next_if(|c| c == '.') {
+        num.push(sep);
+        // scan the part dehind dot
+        while let Some(c) = self.next_if(|c| c.is_ascii_digit()) {
+            num.push(c);
+        }
+    }
+
+    Some(Token::Number(num))
+}
+
+// scan Ident: table/column names, or keywords
+fn scan_ident(&mut self) -> Option<Token> {
+    let mut value = self.next_if(|c| c.is_alphabetic())?.to_string();
+    while let Some(c) = self.next_if(|c| c.is_alphanumeric() || c == '_') {
+        value.push(c);
+    }
+
+    Some(Keyword::from_str(&value).map_or(Token::Ident(value.to_lowercase()), Token::Keyword))
+}
+
+// scan symbols
+fn scan_symbol(&mut self) -> Option<Token> {
+    self.next_if_token(|c| match c {
+        '*' => Some(Token::Asterisk),
+        '(' => Some(Token::OpenParen),
+        ')' => Some(Token::CloseParen),
+        ',' => Some(Token::Comma),
+        ';' => Some(Token::Semicolon),
+        '+' => Some(Token::Plus),
+        '-' => Some(Token::Minus),
+        '/' => Some(Token::Slash),
+        _ => None,
+    })
+}
+}
