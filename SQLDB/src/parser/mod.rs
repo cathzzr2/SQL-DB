@@ -253,3 +253,105 @@ impl<'a> Parser<'a> {
         self.next_if(|t| t == &token)
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use crate::{error::Result, sql::parser::ast};
+
+    use super::Parser;
+
+    #[test]
+    fn test_parser_create_table() -> Result<()> {
+        let sql1 = "
+            create table tbl1 (
+                a int default 100,
+                b float not null,
+                c varchar null,
+                d bool default true
+            );
+        ";
+        let stmt1 = Parser::new(sql1).parse()?;
+
+        let sql2 = "
+        create            table tbl1 (
+            a int default     100,
+            b float not null     ,
+            c varchar      null,
+            d       bool default        true
+        );
+        ";
+        let stmt2 = Parser::new(sql2).parse()?;
+        assert_eq!(stmt1, stmt2);
+
+        let sql3 = "
+            create            table tbl1 (
+            a int default     100,
+            b float not null     ,
+            c varchar      null,
+            d       bool default        true
+        )
+        ";
+
+        let stmt3 = Parser::new(sql3).parse();
+        assert!(stmt3.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_parser_insert() -> Result<()> {
+        let sql1 = "insert into tbl1 values (1, 2, 3, 'a', true);";
+        let stmt1 = Parser::new(sql1).parse()?;
+        assert_eq!(
+            stmt1,
+            ast::Statement::Insert {
+                table_name: "tbl1".to_string(),
+                columns: None,
+                values: vec![vec![
+                    ast::Consts::Integer(1).into(),
+                    ast::Consts::Integer(2).into(),
+                    ast::Consts::Integer(3).into(),
+                    ast::Consts::String("a".to_string()).into(),
+                    ast::Consts::Boolean(true).into(),
+                ]],
+            }
+        );
+
+        let sql2 = "insert into tbl2 (c1, c2, c3) values (3, 'a', true),(4, 'b', false);";
+        let stmt2 = Parser::new(sql2).parse()?;
+        assert_eq!(
+            stmt2,
+            ast::Statement::Insert {
+                table_name: "tbl2".to_string(),
+                columns: Some(vec!["c1".to_string(), "c2".to_string(), "c3".to_string()]),
+                values: vec![
+                    vec![
+                        ast::Consts::Integer(3).into(),
+                        ast::Consts::String("a".to_string()).into(),
+                        ast::Consts::Boolean(true).into(),
+                    ],
+                    vec![
+                        ast::Consts::Integer(4).into(),
+                        ast::Consts::String("b".to_string()).into(),
+                        ast::Consts::Boolean(false).into(),
+                    ],
+                ],
+            }
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parser_select() -> Result<()> {
+        let sql = "select * from tbl1;";
+        let stmt = Parser::new(sql).parse()?;
+        assert_eq!(
+            stmt,
+            ast::Statement::Select {
+                table_name: "tbl1".to_string()
+            }
+        );
+        Ok(())
+    }
+}
