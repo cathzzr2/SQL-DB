@@ -150,3 +150,24 @@ enum KeyPrefix {
     Row(String),
 }
 
+#[cfg(test)]
+mod tests {
+    use crate::{error::Result, sql::engine::Engine, storage::memory::MemoryEngine};
+
+    use super::KVEngine;
+
+    #[test]
+    fn test_create_table() -> Result<()> {
+        let kvengine = KVEngine::new(MemoryEngine::new());
+        let mut s = kvengine.session()?;
+
+        s.execute("create table t1 (a int, b text default 'vv', c integer default 100);")?;
+        s.execute("insert into t1 values(1, 'a', 1);")?;
+        s.execute("insert into t1 values(2, 'b');")?;
+        s.execute("insert into t1(c, a) values(200, 3);")?;
+
+        s.execute("select * from t1;")?;
+
+        Ok(())
+    }
+}
