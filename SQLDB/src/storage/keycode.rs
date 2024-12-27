@@ -573,3 +573,73 @@ impl<'de, 'a> de::VariantAccess<'de> for &mut Deserializer<'de> {
         todo!()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::storage::{
+        keycode::{deserialize_key, serialize_key},
+        mvcc::{MvccKey, MvccKeyPrefix},
+    };
+
+    #[test]
+    fn test_encode() {
+        let ser_cmp = |k: MvccKey, v: Vec<u8>| {
+            let res = serialize_key(&k).unwrap();
+            assert_eq!(res, v);
+        };
+
+        ser_cmp(MvccKey::NextVersion, vec![0]);
+        ser_cmp(MvccKey::TxnAcvtive(1), vec![1, 0, 0, 0, 0, 0, 0, 0, 1]);
+        ser_cmp(
+            MvccKey::TxnWrite(1, vec![1, 2, 3]),
+            vec![2, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 3, 0, 0],
+        );
+        ser_cmp(
+            MvccKey::Version(b"abc".to_vec(), 11),
+            vec![3, 97, 98, 99, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11],
+        );
+    }
+
+    #[test]
+    fn test_encode_prefix() {
+        let ser_cmp = |k: MvccKeyPrefix, v: Vec<u8>| {
+            let res = serialize_key(&k).unwrap();
+            assert_eq!(res, v);
+        };
+
+        ser_cmp(MvccKeyPrefix::NextVersion, vec![0]);
+        ser_cmp(MvccKeyPrefix::TxnAcvtive, vec![1]);
+        ser_cmp(MvccKeyPrefix::TxnWrite(1), vec![2, 0, 0, 0, 0, 0, 0, 0, 1]);
+        ser_cmp(
+            MvccKeyPrefix::Version(b"ab".to_vec()),
+            vec![3, 97, 98, 0, 0],
+        );
+    }
+
+    #[test]
+    fn test_decode() {
+        let der_cmp = |k: MvccKey, v: Vec<u8>| {
+            let res: MvccKey = deserialize_key(&v).unwrap();
+            assert_eq!(res, k);
+        };
+
+        der_cmp(MvccKey::NextVersion, vec![0]);
+        der_cmp(MvccKey::TxnAcvtive(1), vec![1, 0, 0, 0, 0, 0, 0, 0, 1]);
+        der_cmp(
+            MvccKey::TxnWrite(1, vec![1, 2, 3]),
+            vec![2, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 3, 0, 0],
+        );
+        der_cmp(
+            MvccKey::Version(b"abc".to_vec(), 11),
+            vec![3, 97, 98, 99, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11],
+        );
+    }
+
+    // #[test]
+    // fn test_u8_convert() {
+    //     let v = [1 as u8, 2, 3];
+    //     let vv = &v;
+    //     let vvv: Vec<u8> = vv.try_into().unwrap();
+    //     println!("{:?}", vvv);
+    // }
+}
