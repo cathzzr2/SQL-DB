@@ -243,3 +243,59 @@ impl Log {
     }
 }
 
+#[cfg(test)]
+mod tets {
+    use crate::{
+        error::Result,
+        storage::{disk::DiskEngine, engine::Engine},
+    };
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_disk_engine_compact() -> Result<()> {
+        let mut eng = DiskEngine::new(PathBuf::from("/tmp/sqldb/sqldb-log"))?;
+        // Write in some data
+        eng.set(b"key1".to_vec(), b"value".to_vec())?;
+        eng.set(b"key2".to_vec(), b"value".to_vec())?;
+        eng.set(b"key3".to_vec(), b"value".to_vec())?;
+        eng.delete(b"key1".to_vec())?;
+        eng.delete(b"key2".to_vec())?;
+
+        // Re-write
+        eng.set(b"aa".to_vec(), b"value1".to_vec())?;
+        eng.set(b"aa".to_vec(), b"value2".to_vec())?;
+        eng.set(b"aa".to_vec(), b"value3".to_vec())?;
+        eng.set(b"bb".to_vec(), b"value4".to_vec())?;
+        eng.set(b"bb".to_vec(), b"value5".to_vec())?;
+
+        let iter = eng.scan(..);
+        let v = iter.collect::<Result<Vec<_>>>()?;
+        assert_eq!(
+            v,
+            vec![
+                (b"aa".to_vec(), b"value3".to_vec()),
+                (b"bb".to_vec(), b"value5".to_vec()),
+                (b"key3".to_vec(), b"value".to_vec()),
+            ]
+        );
+        drop(eng);
+
+        let mut eng2 = DiskEngine::new_compact(PathBuf::from("/tmp/sqldb/sqldb-log"))?;
+        let iter2 = eng2.scan(..);
+        let v2 = iter2.collect::<Result<Vec<_>>>()?;
+        assert_eq!(
+            v2,
+            vec![
+                (b"aa".to_vec(), b"value3".to_vec()),
+                (b"bb".to_vec(), b"value5".to_vec()),
+                (b"key3".to_vec(), b"value".to_vec()),
+            ]
+        );
+        drop(eng2);
+
+        std::fs::remove_dir_all("/tmp/sqldb")?;
+
+        Ok(())
+    }
+}
+
